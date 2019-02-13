@@ -8,6 +8,7 @@ metadata:
     chart: {{ .Chart.Name }}-{{ .Chart.Version }}
     heritage: {{ .Release.Service }}
     release: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
 spec:
   allowedCapabilities:
     - NET_BIND_SERVICE

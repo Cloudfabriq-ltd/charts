@@ -12,6 +12,7 @@ metadata:
     {{- if .Values.controller.metrics.serviceMonitor.additionalLabels }}
 {{ toYaml .Values.controller.metrics.serviceMonitor.additionalLabels | indent 4 }}
     {{- end }}
+  namespace: {{ .Release.Namespace }}
 spec:
   endpoints:
     - port: metrics
