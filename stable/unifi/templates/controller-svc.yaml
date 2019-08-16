@@ -1,12 +1,13 @@
+{{ if not .Values.unifiedService.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
   name: {{ template "unifi.fullname" . }}-controller
   labels:
-    app: {{ template "unifi.name" . }}
-    chart: {{ template "unifi.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+    app.kubernetes.io/name: {{ include "unifi.name" . }}
+    helm.sh/chart: {{ include "unifi.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- if .Values.controllerService.labels }}
 {{ toYaml .Values.controllerService.labels | indent 4 }}
 {{- end }}
@@ -47,20 +48,7 @@ spec:
 {{ if (and (eq .Values.controllerService.type "NodePort") (not (empty .Values.controllerService.nodePort))) }}
       nodePort: {{.Values.controllerService.nodePort}}
 {{ end }}
-    - port: {{ .Values.controllerService.stun.port }}
-      targetPort: stun
-      protocol: UDP
-      name: stun
-{{ if (and (eq .Values.controllerService.type "NodePort") (not (empty .Values.controllerService.stun.nodePort))) }}
-      nodePort: {{.Values.controllerService.stun.nodePort}}
-{{ end }}
-    - port: {{ .Values.controllerService.discovery.port }}
-      targetPort: discovery
-      protocol: UDP
-      name: discovery
-{{ if (and (eq .Values.controllerService.type "NodePort") (not (empty .Values.controllerService.discovery.nodePort))) }}
-      nodePort: {{.Values.controllerService.discovery.nodePort}}
-{{ end }}
   selector:
-    app: {{ template "unifi.name" . }}
-    release: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ include "unifi.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{ end }}

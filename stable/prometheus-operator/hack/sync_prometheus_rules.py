@@ -25,12 +25,28 @@ def change_style(style, representer):
 # Source files list
 charts = [
     {
-        'source': 'https://raw.githubusercontent.com/coreos/prometheus-operator/master/contrib/kube-prometheus/manifests/prometheus-rules.yaml',
-        'destination': '../templates/alertmanager/rules'
+        'source': 'https://raw.githubusercontent.com/coreos/kube-prometheus/master/manifests/prometheus-rules.yaml',
+        'destination': '../templates/prometheus/rules-1.14',
+        'min_kubernetes': '1.14.0-0',
+        'max_kubernetes': '1.16.0-0'
     },
     {
         'source': 'https://raw.githubusercontent.com/etcd-io/etcd/master/Documentation/op-guide/etcd3_alert.rules.yml',
-        'destination': '../templates/alertmanager/rules'
+        'destination': '../templates/prometheus/rules-1.14',
+        'min_kubernetes': '1.14.0-0',
+        'max_kubernetes': '1.16.0-0'
+    },
+    {
+        'source': 'https://raw.githubusercontent.com/coreos/kube-prometheus/release-0.1/manifests/prometheus-rules.yaml',
+        'destination': '../templates/prometheus/rules',
+        'min_kubernetes': '1.11.0-0',
+        'max_kubernetes': '1.14.0-0'
+    },
+    {
+        'source': 'https://raw.githubusercontent.com/etcd-io/etcd/master/Documentation/op-guide/etcd3_alert.rules.yml',
+        'destination': '../templates/prometheus/rules',
+        'min_kubernetes': '1.11.0-0',
+        'max_kubernetes': '1.14.0-0'
     },
 ]
 
@@ -48,6 +64,8 @@ condition_map = {
     'kubernetes-storage': ' .Values.defaultRules.rules.kubernetesStorage',
     'kubernetes-system': ' .Values.defaultRules.rules.kubernetesSystem',
     'node.rules': ' .Values.nodeExporter.enabled .Values.defaultRules.rules.node',
+    'node-network': ' .Values.defaultRules.rules.network',
+    'node-time': ' .Values.defaultRules.rules.time',
     'prometheus-operator': ' .Values.defaultRules.rules.prometheusOperator',
     'prometheus.rules': ' .Values.defaultRules.rules.prometheus',
     'kubernetes-apps': ' .Values.kubeStateMetrics.enabled .Values.defaultRules.rules.kubernetesApps',
@@ -63,6 +81,7 @@ alert_condition_map = {
     'PrometheusOperatorDown': '.Values.prometheusOperator.enabled',
     'NodeExporterDown': '.Values.nodeExporter.enabled',
     'CoreDNSDown': '.Values.kubeDns.enabled',
+    'AlertmanagerDown': '.Values.alertmanager.enabled',
 }
 
 replacement_map = {
@@ -75,11 +94,19 @@ replacement_map = {
     'job="alertmanager-main"': {
         'replacement': 'job="{{ $alertmanagerJob }}"',
         'init': '{{- $alertmanagerJob := printf "%s-%s" (include "prometheus-operator.fullname" .) "alertmanager" }}'},
+    'namespace="monitoring"': {
+        'replacement': 'namespace="{{ $namespace }}"',
+        'init': '{{- $namespace := .Release.Namespace }}'},
+    'alertmanager-$1': {
+        'replacement': '$1',
+        'init': ''},
 }
 
 # standard header
 header = '''# Generated from '%(name)s' group from %(url)s
-{{- if and .Values.defaultRules.create%(condition)s }}%(init_line)s
+# Do not change in-place! In order to change this file first read following link:
+# https://github.com/helm/charts/tree/master/stable/prometheus-operator/hack
+{{- if and (semverCompare ">=%(min_kubernetes)s" .Capabilities.KubeVersion.GitVersion) (semverCompare "<%(max_kubernetes)s" .Capabilities.KubeVersion.GitVersion) .Values.defaultRules.create%(condition)s }}%(init_line)s
 apiVersion: {{ printf "%%s/v1" (.Values.prometheusOperator.crdApiGroup | default "monitoring.coreos.com") }}
 kind: PrometheusRule
 metadata:
@@ -151,11 +178,11 @@ def add_rules_conditions(rules, indent=4):
             found_block_end = False
             last_line_index = next_index
             while not found_block_end:
-                last_line_index = rules.rindex('\n', index, last_line_index - 1) # find the starting position of the last line
+                last_line_index = rules.rindex('\n', index, last_line_index - 1)  # find the starting position of the last line
                 last_line = rules[last_line_index + 1:next_index]
 
                 if last_line.startswith('{{- if'):
-                    next_index = last_line_index + 1 # move next_index back if the current block ends in an if statement
+                    next_index = last_line_index + 1  # move next_index back if the current block ends in an if statement
                     continue
 
                 found_block_end = True
@@ -164,7 +191,7 @@ def add_rules_conditions(rules, indent=4):
     return rules
 
 
-def write_group_to_file(group, url, destination):
+def write_group_to_file(group, url, destination, min_kubernetes, max_kubernetes):
     fix_expr(group['rules'])
 
     # prepare rules string representation
@@ -174,7 +201,8 @@ def write_group_to_file(group, url, destination):
     for line in replacement_map:
         if line in rules:
             rules = rules.replace(line, replacement_map[line]['replacement'])
-            init_line += '\n' + replacement_map[line]['init']
+            if replacement_map[line]['init']:
+                init_line += '\n' + replacement_map[line]['init']
     # append per-alert rules
     rules = add_rules_conditions(rules)
     # initialize header
@@ -183,6 +211,8 @@ def write_group_to_file(group, url, destination):
         'url': url,
         'condition': condition_map.get(group['name'], ''),
         'init_line': init_line,
+        'min_kubernetes': min_kubernetes,
+        'max_kubernetes': max_kubernetes
     }
 
     # rules themselves
@@ -218,7 +248,7 @@ def main():
         # etcd workaround, their file don't have spec level
         groups = yaml_text['spec']['groups'] if yaml_text.get('spec') else yaml_text['groups']
         for group in groups:
-            write_group_to_file(group, chart['source'], chart['destination'])
+            write_group_to_file(group, chart['source'], chart['destination'], chart['min_kubernetes'], chart['max_kubernetes'])
     print("Finished")
 
 

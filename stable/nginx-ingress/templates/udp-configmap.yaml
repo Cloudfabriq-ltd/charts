@@ -11,5 +11,5 @@ metadata:
   name: {{ template "nginx-ingress.fullname" . }}-udp
   namespace: {{ .Release.Namespace }}
 data:
-{{ toYaml .Values.udp | indent 2 }}
+{{ tpl (toYaml .Values.udp) . | indent 2 }}
 {{- end }}
